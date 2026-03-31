@@ -11,8 +11,10 @@ using namespace std;
 
 class ShaderProgram {
     private:
-        unsigned int shaderProgram = 0;
-        vector<unsigned int> shaders = {};
+        unsigned int m_shaderProgram = 0;
+        vector<unsigned int> m_shaders = {};
+        vector<const char*> m_paths = {};
+        vector<int> m_types = {};
 
         fs::path extractPath(const string& line);
         string getShaderSource(const char *path);
@@ -22,6 +24,7 @@ class ShaderProgram {
         unsigned int id();
         void create();
         void load(int type, const char *path);
+        void reload();
         void link();
         void use();
         void destroy();

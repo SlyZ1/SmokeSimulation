@@ -20,8 +20,10 @@ struct Ray {
 uniform Camera camera;
 uniform vec2 texSize;
 
+#pragma include "./intersections.glsl"
 #pragma include "./smokeFrag.glsl"
 #pragma FDECLARE
+// INTERSECTIONS.GLSL
 bool intersectAABB(Ray ray, AABB box);
 #pragma FEND
 

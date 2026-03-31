@@ -13,7 +13,7 @@ using namespace std;
 int frameCount = 0;
 unsigned int VBO, VAO, EBO;
 ShaderProgram shaderProg;
-Camera camera(0.1, 0.3);
+Camera camera(0.02, 0.25);
 App app;
 
 string getShaderSource(const char *filepath){
@@ -50,6 +50,10 @@ void init(){
     };  
     tie(VBO, VAO, EBO) = ShaderProgram::addData(vertices, indices);
     ShaderProgram::linkData(3, sizeof(float), 0);
+
+    camera.resetMousePos(app.mouseX(), app.mouseY());
+
+    shaderProg.reload();
 }
 
 void handleCamera(){
@@ -85,8 +89,15 @@ void render(){
 }
 
 void inputs(){
+    // Toggle cursor
     if (app.keyPressedOnce(GLFW_KEY_P, frameCount)){
         app.toggleCursor(app.cursorIsHidden());
+    }
+
+    // Hot reload shaders
+    if (app.keyPressedOnce(GLFW_KEY_R, frameCount)){
+        shaderProg.reload();
+        cout << "Shaders reloaded" << endl;
     }
 }
 
