@@ -3,6 +3,9 @@
 #include <sstream>
 #include <glad/glad.h>
 #include <vector>
+#include <filesystem>
+
+namespace fs = std::filesystem;
 
 using namespace std;
 
@@ -11,6 +14,7 @@ class ShaderProgram {
         unsigned int shaderProgram = 0;
         vector<unsigned int> shaders = {};
 
+        fs::path extractPath(const string& line);
         string getShaderSource(const char *path);
 
     public:

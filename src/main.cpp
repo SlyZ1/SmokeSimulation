@@ -34,8 +34,8 @@ void init(){
     app.toggleCursor(false);
 
     shaderProg.create();
-    shaderProg.load(GL_VERTEX_SHADER, "src/shaders/vertex.glsl");
-    shaderProg.load(GL_FRAGMENT_SHADER, "src/shaders/frag.glsl");
+    shaderProg.load(GL_VERTEX_SHADER, "src/shaders/mainVertex.glsl");
+    shaderProg.load(GL_FRAGMENT_SHADER, "src/shaders/mainFrag.glsl");
     shaderProg.link();
 
     vector<float> vertices = {
@@ -75,6 +75,9 @@ void render(){
     GLuint camLookLoc = glGetUniformLocation(shaderProg.id(), "camera.lookDir");
     glUniform3f(camPosLoc, camera.position().x, camera.position().y, camera.position().z);
     glUniform3f(camLookLoc, camera.lookDir().x, camera.lookDir().y, camera.lookDir().z);
+
+    GLuint texSizeLoc = glGetUniformLocation(shaderProg.id(), "texSize");
+    glUniform2f(texSizeLoc, 800, 600);
 
     shaderProg.use();
     glBindVertexArray(VAO);
