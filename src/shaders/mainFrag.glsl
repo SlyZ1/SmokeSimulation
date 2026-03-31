@@ -19,11 +19,20 @@ struct Ray {
 
 uniform Camera camera;
 uniform vec2 texSize;
-uniform float stepSize;
+uniform uint frame;
 
+uniform float stepSize;
+uniform bool useNoise;
+
+#pragma include "./rand.glsl"
 #pragma include "./intersections.glsl"
 #pragma include "./smokeFrag.glsl"
+
 #pragma FDECLARE
+// RAND.GLSL
+void initSeed(uvec2 pos, uint frame);
+float rand(inout uint seed);
+
 // INTERSECTIONS.GLSL
 float intersectAABB(Ray ray, AABB box);
 bool isInAABB(vec3 point, AABB box);
@@ -41,18 +50,24 @@ float sampleSphereDensity(vec3 pos){
     return pow(max(1 - length(pos), 0), 0.5) * 2;
 }
 
-float computeTransmittance(Ray ray, AABB box){
+float computeTransmittance(Ray ray, AABB box, inout uint seed){
     float transmittance = 1;
-    float ss = 0.1;
     while(isInAABB(ray.origin, box)){
-        float rho = sampleConstantDensity(ray.origin);
-        transmittance *= beerLambert(ss, rho);
-        ray.origin += ray.dir * ss;
+        float noise = 0;
+        if (useNoise) noise = (rand(seed) * 2 - 1) * stepSize;
+        ray.origin += ray.dir * noise;
+
+        if (isInAABB(ray.origin, box)){
+            float rho = sampleConstantDensity(ray.origin);
+            transmittance *= beerLambert(stepSize, rho);
+        }
+
+        ray.origin += ray.dir * stepSize;
     }
     return transmittance;
 }
 
-vec4 intersect(Ray ray){
+vec4 intersect(Ray ray, inout uint seed){
     AABB box = AABB(vec3(-1), vec3(1));
     float t = intersectAABB(ray, box);
 
@@ -61,7 +76,7 @@ vec4 intersect(Ray ray){
 
     if (t >= 0){
         ray.origin += ray.dir * (t + 1e-4);
-        float transmittance = computeTransmittance(ray, box);
+        float transmittance = computeTransmittance(ray, box, seed);
         return (1 - transmittance) * vec4(1);
     }
     return vec4(0);
@@ -91,11 +106,13 @@ vec2 ratio(vec2 vec){
 
 void main()
 {
+    uint seed = initSeed(uvec2(gl_FragCoord.xy), frame);
+
     vec2 pos = ratio(vClipPos.xy);
     Ray ray;
     ray.origin = camera.pos;
     ray.dir = camera.lookDir;
     ray = fovRay(pos, ray);
 
-    FragColor = intersect(ray);
+    FragColor = intersect(ray, seed);
 }

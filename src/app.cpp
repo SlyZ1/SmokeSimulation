@@ -52,8 +52,8 @@ void App::setClearColor(float r, float g, float b, float a){
     glClearColor(r, g, b, a);
 }
 
-void App::startFrame(int frame){
-    if(keyPressedOnce(GLFW_KEY_ESCAPE, frame))
+void App::startFrame(unsigned int frameCount){
+    if(keyPressedOnce(GLFW_KEY_ESCAPE, frameCount))
         glfwSetWindowShouldClose(m_window, true);
     glClear(GL_COLOR_BUFFER_BIT);
 
@@ -78,8 +78,8 @@ bool App::keyPressed(int key){
     return glfwGetKey(m_window, key) == GLFW_PRESS;
 }
 
-bool App::keyPressedOnce(int key, int frame){
-    static int wasPressed[GLFW_KEY_LAST + 1] = {INT_MAX};
+bool App::keyPressedOnce(int key, unsigned int frame){
+    static unsigned int wasPressed[GLFW_KEY_LAST + 1] = {UINT_MAX};
 
     bool isPressed = glfwGetKey(m_window, key) == GLFW_PRESS;
 
@@ -89,7 +89,7 @@ bool App::keyPressedOnce(int key, int frame){
     }
 
     if (!isPressed) {
-        wasPressed[key] = INT_MAX;
+        wasPressed[key] = UINT_MAX;
     }
 
     return false;
@@ -118,4 +118,16 @@ float App::mouseY(){
 
 void App::terminate(){
     glfwTerminate();
+}
+
+int App::width(){
+    int width;
+    glfwGetWindowSize(m_window, &width, nullptr);
+    return width;
+}
+
+int App::height(){
+    int height;
+    glfwGetWindowSize(m_window, nullptr, &height);
+    return height;
 }

@@ -7,31 +7,22 @@
 #include "app.hpp"
 #include "camera.hpp"
 #include "shader_program.hpp"
+#include "ui.hpp"
 
 using namespace std;
 
-int frameCount = 0;
+unsigned int frameCount = 0;
 unsigned int VBO, VAO, EBO;
 ShaderProgram shaderProg;
+
 Camera camera(0.02, 0.25);
-App app;
-
-string getShaderSource(const char *filepath){
-    ifstream file(filepath);
-
-    if (!file.is_open()) {
-        cerr << "Erreur: impossible d'ouvrir le fichier " << filepath << endl;
-        return "";
-    }
-
-    stringstream shaderText;
-    shaderText << file.rdbuf(); 
-    return shaderText.str();
-}
+App app = {};
+UI ui;
 
 void init(){
     app.init(800, 600, "Smoke Simulation");
     app.toggleCursor(false);
+    ui = UI(app);
 
     shaderProg.create();
     shaderProg.load(GL_VERTEX_SHADER, "src/shaders/mainVertex.glsl");
@@ -59,6 +50,7 @@ void init(){
 void handleCamera(){
     if (!app.cursorIsHidden()){
         camera.hasStoppedMoving();
+        camera.resetMousePos(app.mouseX(), app.mouseY());
         return;
     }
 
@@ -81,7 +73,9 @@ void render(){
     glUniform3f(camLookLoc, camera.lookDir().x, camera.lookDir().y, camera.lookDir().z);
 
     GLuint texSizeLoc = glGetUniformLocation(shaderProg.id(), "texSize");
-    glUniform2f(texSizeLoc, 800, 600);
+    GLuint frameLoc = glGetUniformLocation(shaderProg.id(), "frame");
+    glUniform2f(texSizeLoc, app.width(), app.height());
+    glUniform1ui(frameLoc, frameCount);
 
     shaderProg.use();
     glBindVertexArray(VAO);
@@ -92,6 +86,7 @@ void inputs(){
     // Toggle cursor
     if (app.keyPressedOnce(GLFW_KEY_P, frameCount)){
         app.toggleCursor(app.cursorIsHidden());
+        ui.toggle();
     }
 
     // Hot reload shaders
@@ -113,8 +108,11 @@ int main(){
     while(!app.shouldClose())
     {
         app.startFrame(frameCount);
-
         handleCamera();
+
+        ui.render();
+        ui.updateGPU(shaderProg.id());
+        
         render();
         inputs();
 

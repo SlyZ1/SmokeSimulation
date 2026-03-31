@@ -1,0 +1,15 @@
+uint pcg_hash(uint v) {
+    v = v * 747796405u + 2891336453u;
+    uint word = ((v >> ((v >> 28u) + 4u)) ^ v) * 277803737u;
+    return (word >> 22u) ^ word;
+}
+
+uint initSeed(uvec2 pos, uint frame) {
+    uint v = pos.x + pos.y * 4096u + frame * 1315423911u;
+    return pcg_hash(v);
+}
+
+float rand(inout uint seed) {
+    seed = pcg_hash(seed);
+    return float(seed) * (1.0 / 4294967296.0);
+}

@@ -5,6 +5,9 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
+#ifndef APP_HPP
+#define APP_HPP
+
 using namespace std;
 
 class App {
@@ -16,14 +19,19 @@ class App {
     public:
         void init(int width, int height, const char *name);
         void setClearColor(float r, float g, float b, float a);
-        void startFrame(int frameCount);
+        void startFrame(unsigned int frameCount);
         void endFrame();
         bool shouldClose();
         bool keyPressed(int key);
-        bool keyPressedOnce(int key, int frame);
+        bool keyPressedOnce(int key, unsigned int frame);
         void toggleCursor(bool show);
         bool cursorIsHidden();
         float mouseX();
         float mouseY();
         void terminate();
+        int width();
+        int height();
+        ImGuiIO* getIo() { return m_io; }
 };
+
+#endif
