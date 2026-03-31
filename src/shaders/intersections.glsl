@@ -1,5 +1,7 @@
-bool intersectAABB(Ray ray, AABB box)
+float intersectAABB(Ray ray, AABB box)
 {
+    float t = -1.0f;
+    
     float tmin = 0;
     float tmax = 1e20;
     
@@ -22,9 +24,14 @@ bool intersectAABB(Ray ray, AABB box)
         tmax = min(tmax, t1);
         
         if (tmax < tmin) {
-            return false;
+            return t;
         }
     }
     
-    return true;
+    t = tmin;
+    return t;
+}
+
+bool isInAABB(vec3 point, AABB box) {
+    return all(greaterThanEqual(point, box.min)) && all(lessThanEqual(point, box.max));
 }

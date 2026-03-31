@@ -19,20 +19,50 @@ struct Ray {
 
 uniform Camera camera;
 uniform vec2 texSize;
+uniform float stepSize;
 
 #pragma include "./intersections.glsl"
 #pragma include "./smokeFrag.glsl"
 #pragma FDECLARE
 // INTERSECTIONS.GLSL
-bool intersectAABB(Ray ray, AABB box);
+float intersectAABB(Ray ray, AABB box);
+bool isInAABB(vec3 point, AABB box);
 #pragma FEND
 
-// current code
+float beerLambert(float distance, float rho){
+    return exp(-distance * rho);
+}
+
+float sampleConstantDensity(vec3 pos){
+    return 0.5;
+}
+
+float sampleSphereDensity(vec3 pos){
+    return pow(max(1 - length(pos), 0), 0.5) * 2;
+}
+
+float computeTransmittance(Ray ray, AABB box){
+    float transmittance = 1;
+    float ss = 0.1;
+    while(isInAABB(ray.origin, box)){
+        float rho = sampleConstantDensity(ray.origin);
+        transmittance *= beerLambert(ss, rho);
+        ray.origin += ray.dir * ss;
+    }
+    return transmittance;
+}
+
 vec4 intersect(Ray ray){
-    
     AABB box = AABB(vec3(-1), vec3(1));
-    if (intersectAABB(ray, box)){
-        return vec4(1);
+    float t = intersectAABB(ray, box);
+
+    if (isInAABB(ray.origin, box))
+        t = 0;
+
+    if (t >= 0){
+        ray.origin += ray.dir * (t + 1e-4);
+        float transmittance = computeTransmittance(ray, box);
+        return (1 - transmittance) * vec4(1);
     }
     return vec4(0);
 }
