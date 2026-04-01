@@ -17,12 +17,18 @@ struct Ray {
     vec3 dir;
 };
 
+struct NoiseData {
+    float bnoise;
+    uint seed;
+};
+
 uniform Camera camera;
 uniform vec2 texSize;
 uniform uint frame;
 
 uniform float stepSize;
 uniform bool useNoise;
+uniform sampler2D blueNoise;
 
 #pragma include "./rand.glsl"
 #pragma include "./intersections.glsl"
@@ -32,6 +38,7 @@ uniform bool useNoise;
 // RAND.GLSL
 void initSeed(uvec2 pos, uint frame);
 float rand(inout uint seed);
+float rand_bn(ivec2 pixel, int frame);
 
 // INTERSECTIONS.GLSL
 float intersectAABB(Ray ray, AABB box);
@@ -50,24 +57,23 @@ float sampleSphereDensity(vec3 pos){
     return pow(max(1 - length(pos), 0), 0.5) * 2;
 }
 
-float computeTransmittance(Ray ray, AABB box, inout uint seed){
+float computeTransmittance(Ray ray, AABB box, inout NoiseData nd){
     float transmittance = 1;
+    float ss = stepSize;
+    if (useNoise){
+        ray.origin += ray.dir * nd.bnoise * ss;
+    }
     while(isInAABB(ray.origin, box)){
-        float noise = 0;
-        if (useNoise) noise = (rand(seed) * 2 - 1) * stepSize;
-        ray.origin += ray.dir * noise;
 
-        if (isInAABB(ray.origin, box)){
-            float rho = sampleConstantDensity(ray.origin);
-            transmittance *= beerLambert(stepSize, rho);
-        }
+        float rho = sampleConstantDensity(ray.origin);
+        transmittance *= beerLambert(ss, rho);
 
-        ray.origin += ray.dir * stepSize;
+        ray.origin += ray.dir * ss;
     }
     return transmittance;
 }
 
-vec4 intersect(Ray ray, inout uint seed){
+vec4 intersect(Ray ray, inout NoiseData nd){
     AABB box = AABB(vec3(-1), vec3(1));
     float t = intersectAABB(ray, box);
 
@@ -76,7 +82,7 @@ vec4 intersect(Ray ray, inout uint seed){
 
     if (t >= 0){
         ray.origin += ray.dir * (t + 1e-4);
-        float transmittance = computeTransmittance(ray, box, seed);
+        float transmittance = computeTransmittance(ray, box, nd);
         return (1 - transmittance) * vec4(1);
     }
     return vec4(0);
@@ -107,12 +113,15 @@ vec2 ratio(vec2 vec){
 void main()
 {
     uint seed = initSeed(uvec2(gl_FragCoord.xy), frame);
-
     vec2 pos = ratio(vClipPos.xy);
+    vec2 uv = (vClipPos.xy + vec2(1)) * 0.5;
+    float bnoise = rand_bn(ivec2(ratio(uv) * texSize.y), int(frame));
+    NoiseData nd = NoiseData(bnoise, seed);
+
     Ray ray;
     ray.origin = camera.pos;
     ray.dir = camera.lookDir;
     ray = fovRay(pos, ray);
 
-    FragColor = intersect(ray, seed);
+    FragColor = intersect(ray, nd);
 }

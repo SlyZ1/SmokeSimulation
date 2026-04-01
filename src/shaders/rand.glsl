@@ -13,3 +13,14 @@ float rand(inout uint seed) {
     seed = pcg_hash(seed);
     return float(seed) * (1.0 / 4294967296.0);
 }
+
+float rand_bn(ivec2 pixel, int frame) {
+    ivec2 size = textureSize(blueNoise, 0);
+
+    // rotation / offset temporel
+    ivec2 offset = ivec2(frame % size.x, (frame * 7) % size.y);
+
+    ivec2 coord = (pixel + offset) % size;
+
+    return texelFetch(blueNoise, coord, 0).r;
+}

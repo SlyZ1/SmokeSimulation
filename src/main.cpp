@@ -8,12 +8,16 @@
 #include "camera.hpp"
 #include "shader_program.hpp"
 #include "ui.hpp"
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 using namespace std;
 
 unsigned int frameCount = 0;
 unsigned int VBO, VAO, EBO;
 ShaderProgram shaderProg;
+
+GLuint blueNoiseTexture;
 
 Camera camera(0.02, 0.25);
 App app = {};
@@ -44,7 +48,21 @@ void init(){
 
     camera.resetMousePos(app.mouseX(), app.mouseY());
 
-    shaderProg.reload();
+    int width, height, channels;
+    unsigned char* data = stbi_load("src/blue_noise/LDR_RGBA_1024.png", &width, &height, &channels, 0);
+    if (!data) {
+        printf("Error loading blue noise texture\n");
+        return;
+    }
+    GLenum format = (channels == 4) ? GL_RGBA : GL_RGB;
+    glGenTextures(1, &blueNoiseTexture);
+    glBindTexture(GL_TEXTURE_2D, blueNoiseTexture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+    stbi_image_free(data);
 }
 
 void handleCamera(){
@@ -76,6 +94,11 @@ void render(){
     GLuint frameLoc = glGetUniformLocation(shaderProg.id(), "frame");
     glUniform2f(texSizeLoc, app.width(), app.height());
     glUniform1ui(frameLoc, frameCount);
+
+    /*GLuint blueNoiseLoc = glGetUniformLocation(shaderProg.id(), "blueNoise");
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, blueNoiseTexture);
+    glUniform1i(blueNoiseLoc, 0);*/
 
     shaderProg.use();
     glBindVertexArray(VAO);
