@@ -41,8 +41,11 @@ void UI::renderRender(){
     ImGui::Spacing();
 
     Label("Sigma_t");
-    ImGui::DragFloat("##Sigma_t", &m_sigma_t);
-    m_sigma_t = glm::max(m_sigma_t, 1.000f);
+    ImGui::DragFloat("##Sigma_t", &m_sigma_t, 0.5f);
+    m_sigma_t = glm::max(m_sigma_t, 1.0f);
+    Label("Sigma_s");
+    ImGui::DragFloat("##Sigma_s", &m_sigma_s, 0.25f);
+    m_sigma_s = glm::max(m_sigma_s, 0.0f);
     Label("Background color");
     ImGui::ColorEdit3("##Background color", &backgroundColor.r);
 
@@ -90,5 +93,6 @@ void UI::updateGPU(GLuint shaderProgramId){
     glUniform1f(glGetUniformLocation(shaderProgramId, "stepSize"), m_stepSize);
     glUniform1i(glGetUniformLocation(shaderProgramId, "useNoise"), m_useNoise);
     glUniform1f(glGetUniformLocation(shaderProgramId, "sigma_t"), m_sigma_t);
+    glUniform1f(glGetUniformLocation(shaderProgramId, "sigma_s"), m_sigma_s);
     glUniform3f(glGetUniformLocation(shaderProgramId, "backgroundColor"), backgroundColor.r, backgroundColor.g, backgroundColor.b);
 }

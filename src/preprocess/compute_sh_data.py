@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.special import legendre
+from scipy.special import legendre, sph_harm_y
 from sympy.physics.wigner import gaunt
 import matplotlib.pyplot as plt
 
@@ -22,21 +22,19 @@ def optical_depth(beta=None, b2=None):
         b2 = np.sin(beta)**2
     return np.sqrt(np.pi) * np.exp(-b2)
 
-def compute_zh_coeffs(order=4, n_samples=512):
-    mu = np.linspace(-1, 1, n_samples)
-    T = optical_depth(b2=(1 - mu**2))
-    coeffs = []
+def compute_zh_coeffs(order=4, n_beta=256):
+    betas = np.linspace(0, np.pi, n_beta)
+    table = np.zeros((n_beta, order))
+    T = optical_depth(beta=betas)
+    mu = np.cos(betas)
     for l in range(order):
-        if l % 2 == 1:
-            coeffs.append(0)
-            continue
-        P_l = legendre(l)(mu)
-        integrand = T * P_l
-        c_l = (2*l + 1) / 2 * np.trapezoid(integrand, mu)
-        coeffs.append(c_l)
-    return np.array(coeffs)
+        norm = np.sqrt((2*l + 1) / (4 * np.pi))
+        table[:, l] = norm * T * legendre(l)(mu)
+    print(table.flatten()[:8])
+    table.flatten().astype(np.float32).tofile("zh.bin")
+    
 
-def ZH_optical_depth(beta, order=4):
+def ZH_optical_depth(beta, coeffs, order=4):
     mu = np.cos(beta)
     result = 0.0
     for l in range(order):
@@ -59,7 +57,7 @@ def compute_gaunt_tensor(order=4):
                         for m3 in range(-l3, l3+1):
                             if (l1 + l2 + l3) % 2 != 0:
                                 continue
-                            if (m1 + m2 + m3) > 0:
+                            if (m1 + m2 + m3) != 0:
                                 continue
                             if l3 < abs(l1-l2) or l3 > l1+l2:
                                 continue
@@ -67,13 +65,14 @@ def compute_gaunt_tensor(order=4):
                             i = lm_to_idx(l1, m1)
                             j = lm_to_idx(l2, m2)
                             k = lm_to_idx(l3, m3)
-                            tensor[i,j,k] = float(gaunt(l1, l2, l3, m1, m2, m3))
+                            val = gaunt(l1, l2, l3, m1, m2, m3)
+                            tensor[i,j,k] = float(val)
     return tensor
 
 def generate_triple_product_glsl(tensor, order=4):
     n = order**2
     lines = []
-    lines.append("void sh_triple_product3(float f[16], float g[16], out float result[16]){\n")
+    lines.append("void sh_triple_product(float f[16], float g[16], out float result[16]){\n")
     equals = True
     for i in range(n):
         equals = True
@@ -110,13 +109,13 @@ def compute_a_b_tables(max_magnitude=50, n_table=256, n_samples=1024, plot_res=F
         plt.plot(magnitudes, a_table, label='a')
         plt.plot(magnitudes, b_table, label='b')
         plt.show()
-    exp_data = [max_magnitude] + a_table + b_table
+    exp_data = np.concatenate([[max_magnitude], a_table, b_table]).astype(np.float32)
     exp_data.tofile("exp_data.bin")
 
 # ------------- SH CONV
 def generate_sh_conv_glsl(order=4):
     lines = []
-    lines.append("void sh_conv3(float f[16], float g[16], out float result[16]){\n")
+    lines.append("void sh_conv(float f[16], float g[16], out float result[16]){\n")
     equals = np.ones(order**2)
     for l in range(order):
         for m in range(-l, l+1):
@@ -124,22 +123,49 @@ def generate_sh_conv_glsl(order=4):
             i = lm_to_idx(l, m)
             j = lm_to_idx(l, 0)
             equal = equals[i]
-            lines.append(f"\tresult[{i}] {'' if equal else '+'}= {factor:.6f} * f[{i}] * g[{j}];\n")
+            lines.append(f"\tresult[{i}] {'' if equal == 1 else '+'}= {factor:.6f} * f[{i}] * g[{j}];\n")
             equals[i] = 0
     lines.append("}")
     with open("sh_conv.glsl", "w") as f:
         f.writelines(lines)
 
+# -------------- FUNC TO SH
+def hg(g):
+    factor = 1 / (4 * np.pi) * (1 - g**2)
+    hg_func = lambda theta, phi : factor / np.pow(1 + g**2 - 2*g*np.cos(theta), 1.5)
+    return hg_func
+
+def directional_light(theta_l, phi_l, sharpness=1000):
+    def f(theta, phi):
+        mu = np.cos(theta)
+        mu_l = np.cos(theta_l)
+        # produit scalaire entre direction et lumière
+        dot = mu * mu_l + np.sqrt(1-mu**2) * np.sqrt(1-mu_l**2) * np.cos(phi - phi_l)
+        return np.exp(sharpness * (dot - 1))
+    return f
+
+def project_sh_full(f, order=4, n_theta=256, n_phi=512):
+    theta = np.linspace(0, np.pi, n_theta)
+    phi = np.linspace(0, 2*np.pi, n_phi)
+    THETA, PHI = np.meshgrid(theta, phi)
+    sin_theta = np.sin(THETA)
+    dOmega = sin_theta * (np.pi/n_theta) * (2*np.pi/n_phi)
+    
+    f_vals = f(THETA, PHI)
+    
+    coeffs = np.zeros(order**2)
+    for l in range(order):
+        for m in range(-l, l+1):
+            i = lm_to_idx(l, m)
+            Y = np.real(sph_harm_y(l, m, THETA, PHI))
+            coeffs[i] = np.sum(f_vals * Y * dOmega)
+    return coeffs.astype(np.float32)
+
 if __name__ == "__main__":
     order = 4
 
     # ZH COEFFS
-    coeffs = compute_zh_coeffs(order=order, n_samples=10000)
-    coeffs.tofile("zh.bin")
-    print(f"Zonal coefficients for order {order}: \n{coeffs}")
-    # betas = np.linspace(0, np.pi, 6)
-    # print(ZH_optical_depth(betas))
-    # print(optical_depth(betas))
+    compute_zh_coeffs()
 
     # GAUNT TENSOR
     gamma = compute_gaunt_tensor()
@@ -154,5 +180,15 @@ if __name__ == "__main__":
     print("Exp* parameters computed.")
 
     # SH CONV
-    generate_sh_conv_glsl()
-    print("SH conv written in glsl file.")
+    # generate_sh_conv_glsl()
+    # print("SH conv written in glsl file.")
+
+    # HG to SH
+    hg_sh = project_sh_full(hg(0.42), n_theta=512, n_phi=512)
+    hg_sh.astype(np.float32).tofile("hg_sh.bin")
+    print("HG function components computed.")
+
+    dir_sh = project_sh_full(directional_light(-np.pi / 4, np.pi/2), n_theta=512, n_phi=512)
+    print(dir_sh)
+    dir_sh.astype(np.float32).tofile("dir_sh.bin")
+    print("Dir function components computed.")

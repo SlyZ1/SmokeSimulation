@@ -118,6 +118,15 @@ void ShaderProgram::link(){
         glGetProgramInfoLog(m_shaderProgram, 512, NULL, infoLog);
         cerr << "ShaderProgram linking failed : " << infoLog << endl;
     }
+
+    GLint status;
+    glValidateProgram(m_shaderProgram);
+    glGetProgramiv(m_shaderProgram, GL_VALIDATE_STATUS, &status);
+    if (status == GL_FALSE) {
+        char log[512];
+        glGetProgramInfoLog(m_shaderProgram, 512, nullptr, log);
+        std::cerr << "Program invalid: " << log << std::endl;
+    }
     
     //Delete shaders
     for(const int shader : m_shaders){
@@ -128,6 +137,14 @@ void ShaderProgram::link(){
 
 void ShaderProgram::use(){
     glUseProgram(m_shaderProgram);
+}
+
+void ShaderProgram::dispatch(GLuint x, GLuint y, GLuint z){
+    glDispatchCompute(x, y, z);
+}
+
+void ShaderProgram::barrier(GLbitfield memBarrier){
+    glMemoryBarrier(memBarrier);
 }
 
 void ShaderProgram::destroy(){

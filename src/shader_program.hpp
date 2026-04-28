@@ -27,6 +27,8 @@ class ShaderProgram {
         void reload();
         void link();
         void use();
+        void dispatch(GLuint x, GLuint y, GLuint z);
+        void barrier(GLbitfield memBarrier);
         void destroy();
 
         template<typename T>

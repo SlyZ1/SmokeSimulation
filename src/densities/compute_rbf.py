@@ -24,10 +24,10 @@ def load_density(path):
     D_t = copy(D)
     X = np.indices(D.shape)
     X = X.reshape(3, -1).T
-    distances = np.linalg.norm(X.reshape((D.shape[0], D.shape[1], D.shape[2], 3)) / np.array(D.shape) - [0.5,0.5,0.5], axis=-1)
+    distances = np.linalg.norm(X.reshape((D.shape[0], D.shape[1], D.shape[2], 3)) / D.shape[0] - [0.5,0.5,0.5], axis=-1)
     distances /= distances.max()
     #D_t = D_t + 0.01 * distances
-    X = X.astype(np.float32) / np.array(D.shape)
+    X = X.astype(np.float32) / D.shape[0]
 
     D_shape = D.shape
 
@@ -82,7 +82,7 @@ def teleport(R_, W_, D_shape, Res):
     idx = torch.randint(0, max_error_pos.shape[0], (1,)).item()
     max_error_pos = max_error_pos[idx][0]
     mex, mey, mez = torch.unravel_index(max_error_pos, D_shape)
-    new_pos = torch.stack([mex, mey, mez]) / torch.tensor(D_shape, dtype=torch.float32).to(device)
+    new_pos = torch.stack([mex, mey, mez]) / torch.tensor(D_shape[0], dtype=torch.float32).to(device)
 
     rbf_importance = W_.abs() * (R_.abs() ** 3)
     least_important_rbf = torch.argmin(rbf_importance)
