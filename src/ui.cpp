@@ -43,11 +43,19 @@ void UI::renderRender(){
     Label("Sigma_t");
     ImGui::DragFloat("##Sigma_t", &m_sigma_t, 0.5f);
     m_sigma_t = glm::max(m_sigma_t, 1.0f);
-    Label("Sigma_s");
-    ImGui::DragFloat("##Sigma_s", &m_sigma_s, 0.25f);
-    m_sigma_s = glm::max(m_sigma_s, 0.0f);
+    Label("Omega");
+    ImGui::SliderFloat("##Omega", &m_omega, 0.0f, 2.0f);
     Label("Background color");
     ImGui::ColorEdit3("##Background color", &backgroundColor.r);
+
+    ImGui::Spacing();
+    ImGui::Spacing();
+
+    Label("Light color");
+    ImGui::ColorEdit3("##Light color", &m_lightColor.r);
+    Label("Light intensity");
+    ImGui::SliderFloat("##Light intensity", &m_lightIntensity, 0.0f, 10.0f);
+    m_lightIntensity = glm::max(m_lightIntensity, 0.0f);
 
     EndTwoColumnLayout();
 }
@@ -93,6 +101,9 @@ void UI::updateGPU(GLuint shaderProgramId){
     glUniform1f(glGetUniformLocation(shaderProgramId, "stepSize"), m_stepSize);
     glUniform1i(glGetUniformLocation(shaderProgramId, "useNoise"), m_useNoise);
     glUniform1f(glGetUniformLocation(shaderProgramId, "sigma_t"), m_sigma_t);
-    glUniform1f(glGetUniformLocation(shaderProgramId, "sigma_s"), m_sigma_s);
+    glUniform1f(glGetUniformLocation(shaderProgramId, "omega"), m_omega);
     glUniform3f(glGetUniformLocation(shaderProgramId, "backgroundColor"), backgroundColor.r, backgroundColor.g, backgroundColor.b);
+
+    glUniform1f(glGetUniformLocation(shaderProgramId, "lightIntensity"), m_lightIntensity);
+    glUniform3f(glGetUniformLocation(shaderProgramId, "lightColor"), m_lightColor.r, m_lightColor.g, m_lightColor.b);
 }

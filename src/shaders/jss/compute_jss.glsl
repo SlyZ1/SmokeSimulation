@@ -16,7 +16,7 @@ layout(rgba32f, binding = 0) writeonly uniform image2D jssImage;
 
 uniform int numRBF;
 uniform float sigma_t;
-uniform float sigma_s;
+uniform float omega;
 
 uniform sampler1D depthTable;
 uniform sampler1D aTable;
@@ -25,6 +25,9 @@ uniform float maxDensityMagnitude;
 uniform float hgSh[16];
 uniform float dirSh[16];
 uniform vec3 backgroundColor;
+
+uniform float lightIntensity;
+uniform vec3 lightColor;
 
 #define PI 3.14159265
 #define PI_4_SQRT 3.544907702
@@ -87,7 +90,7 @@ void main(){
         else{
             rotate_zh_to_sh(T, dir / d, T_h);
         }
-        sh_mul(T_h, -sigma_t * r_l * w_l);
+        sh_mul(T_h, -0.77 * r_l * w_l);
         sh_add(tau, T_h);
     }
     sh_exp(tau, tau);
@@ -98,12 +101,13 @@ void main(){
         Lin_g[i] = 0.0;
         Lin_b[i] = 0.0;
     }
-    Lin_r[0] = backgroundColor.r * PI_4_SQRT;
-    Lin_g[0] = backgroundColor.g * PI_4_SQRT;
-    Lin_b[0] = backgroundColor.b * PI_4_SQRT;
-    vec3 light_color = vec3(1,1,1)*100;
+    vec3 light_color = lightColor * 100 * lightIntensity;
     sh_assign(Lin_r, dirSh); sh_assign(Lin_g, dirSh); sh_assign(Lin_b, dirSh);
     sh_mul(Lin_r, light_color.r); sh_mul(Lin_g, light_color.g); sh_mul(Lin_b, light_color.b);
+    float lin_in = 3;
+    Lin_r[0] += lin_in * backgroundColor.r * PI_4_SQRT;
+    Lin_g[0] += lin_in * backgroundColor.g * PI_4_SQRT;
+    Lin_b[0] += lin_in * backgroundColor.b * PI_4_SQRT;
 
     float Res_r[16], Res_g[16], Res_b[16];
     sh_triple_product(Lin_r, tau, Res_r);
@@ -114,11 +118,11 @@ void main(){
     sh_conv(Res_g, hgSh, tmp_g);
     sh_conv(Res_b, hgSh, tmp_b);
 
-    float omega_over_four_pi = sigma_s / (sigma_t * 4 * PI);
+    float omega_over_four_pi = omega;
     for(int i = 0; i < 16; i++) {
         vec4 result = omega_over_four_pi * vec4(tmp_r[i], tmp_g[i], tmp_b[i], 0.);
         //result = vec4(1000);
-        imageStore(jssImage, ivec2(h, i), max(result, 0.));
+        imageStore(jssImage, ivec2(h, i), result);
         //jss[jssIndex + i] = result;
         //jss[jssIndex + i] = omega_over_four_pi * vec4(tmp_b[i]);
     }

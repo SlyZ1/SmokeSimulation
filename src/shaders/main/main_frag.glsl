@@ -41,6 +41,7 @@ uniform uint frame;
 
 uniform sampler3D densityTexture;
 uniform sampler3D densityTildeTexture;
+uniform ivec3 densityShape;
 
 uniform int numRBF;
 uniform float sigma_t;
@@ -84,7 +85,8 @@ float beerLambert(float dx, float D){
 
 vec3 aabbPos(vec3 pos, AABB box){
     vec3 newPos = (pos - box.min) / (box.max - box.min);
-    newPos *= vec3(1., 1.7, 1.);
+    newPos = vec3(newPos.z, newPos.y, newPos.x);
+    newPos *= (densityShape - vec3(1.)) / densityShape.x;
     return newPos;
 }
 
@@ -100,7 +102,7 @@ float compute_rbf(RBF rbf, vec3 x){
 }
 
 bool rbfTooFar(RBF rbf, vec3 x){
-    return length(rbf.c.xyz - x) > 5 * rbf.r;
+    return length(rbf.c.xyz - x) > 3 * rbf.r;
 }
 
 vec3 getJssCoeff(int l, int i) {
@@ -114,6 +116,7 @@ vec3 Jss(Ray ray, AABB box, inout NoiseData nd){
     float D_tilde = sampleDensity(ray.origin, box, densityTildeTexture);
     float factor = D / D_tilde;
     factor = clamp(factor, 0., 10.);
+    //factor = 1;
     if (D_tilde < 1e-10) factor = 0;
     //return vec3(texture(jssTexture, vec2(0.5, 0.5)).r) * 1000;
     vec3 result = vec3(0.);
@@ -133,9 +136,23 @@ vec3 Jss(Ray ray, AABB box, inout NoiseData nd){
             jss_g[i] = coeff.g;
             jss_b[i] = coeff.b;
         }
-        result += rbf_val * vec3(sh_dot(jss_r, y), sh_dot(jss_g, y), sh_dot(jss_b, y));
+        vec3 scatter = vec3(sh_dot(jss_r, y), sh_dot(jss_g, y), sh_dot(jss_b, y));
+        result += rbf_val * clamp(scatter, 0., 15.);
     }
     result *= factor;
+    return result;
+}
+
+float sampleDensityTilde(vec3 origin, AABB box){
+    float result = 0.;
+    vec3 u = aabbPos(origin, box);
+    for(int l = 0; l < numRBF; l++) {
+        RBF rbf = rbfs[l];
+        if (rbfTooFar(rbf, u)) continue;
+
+        float rbf_val = compute_rbf(rbf, u);
+        result += rbf_val;
+    }
     return result;
 }
 
@@ -150,9 +167,10 @@ vec3 L(Ray ray, AABB box, inout NoiseData nd) {
     vec3 J = vec3(1);
     while(isInAABB(ray.origin, box)){
         float D = sampleDensity(ray.origin, box, densityTexture);
+        //D = sampleDensityTilde(ray.origin, box);
         t_x *= beerLambert(dx, D);
         J = Jss(ray, box, nd);
-        Lm += t_x * sigma_t * D * J * dx;
+        Lm += t_x * sigma_t * J * dx;
 
         if (t_x < 0.01) break;
 
@@ -172,6 +190,7 @@ vec4 intersect(Ray ray, inout NoiseData nd){
     if (t >= 0){
         ray.origin += ray.dir * (t + 1e-4);
         vec3 Lout = L(ray, box, nd);
+        //return vec4(0);
         return vec4(Lout, 1);
     }
     //return vec4(0);

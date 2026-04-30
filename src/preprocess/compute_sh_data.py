@@ -132,7 +132,7 @@ def generate_sh_conv_glsl(order=4):
 # -------------- FUNC TO SH
 def hg(g):
     factor = 1 / (4 * np.pi) * (1 - g**2)
-    hg_func = lambda theta, phi : factor / np.pow(1 + g**2 - 2*g*np.cos(theta), 1.5)
+    hg_func = lambda theta, _ : factor / np.pow(1 + g**2 - 2*g*np.cos(theta), 1.5)
     return hg_func
 
 def directional_light(theta_l, phi_l, sharpness=1000):
@@ -145,11 +145,11 @@ def directional_light(theta_l, phi_l, sharpness=1000):
     return f
 
 def project_sh_full(f, order=4, n_theta=256, n_phi=512):
-    theta = np.linspace(0, np.pi, n_theta)
-    phi = np.linspace(0, 2*np.pi, n_phi)
-    THETA, PHI = np.meshgrid(theta, phi)
-    sin_theta = np.sin(THETA)
-    dOmega = sin_theta * (np.pi/n_theta) * (2*np.pi/n_phi)
+    u = np.linspace(-1, 1, n_theta)
+    theta = np.arccos(u)
+    phi = np.linspace(0, 2*np.pi, n_phi, endpoint=False)
+    THETA, PHI = np.meshgrid(theta, phi, indexing='ij')
+    dOmega = (2/n_theta) * (2*np.pi/n_phi)
     
     f_vals = f(THETA, PHI)
     
@@ -159,6 +159,7 @@ def project_sh_full(f, order=4, n_theta=256, n_phi=512):
             i = lm_to_idx(l, m)
             Y = np.real(sph_harm_y(l, m, THETA, PHI))
             coeffs[i] = np.sum(f_vals * Y * dOmega)
+    coeffs[np.abs(coeffs) < 1e-10] = 0
     return coeffs.astype(np.float32)
 
 if __name__ == "__main__":
@@ -174,7 +175,7 @@ if __name__ == "__main__":
 
     # EXP *
     max_density_mag = 1.85
-    sigma_t = 20
+    sigma_t = 30
     max_mag = np.min([max_density_mag * sigma_t, 15])
     compute_a_b_tables(n_table=256, max_magnitude=max_mag, plot_res=False)
     print("Exp* parameters computed.")
@@ -184,11 +185,12 @@ if __name__ == "__main__":
     # print("SH conv written in glsl file.")
 
     # HG to SH
-    hg_sh = project_sh_full(hg(0.42), n_theta=512, n_phi=512)
+    hg_sh = project_sh_full(hg(0.3), n_theta=512, n_phi=512)
     hg_sh.astype(np.float32).tofile("hg_sh.bin")
     print("HG function components computed.")
+    print(hg_sh)
 
-    dir_sh = project_sh_full(directional_light(-np.pi / 4, np.pi/2), n_theta=512, n_phi=512)
-    print(dir_sh)
+    dir_sh = project_sh_full(directional_light(2 * np.pi / 4, np.pi, sharpness=100), n_theta=512, n_phi=512)
     dir_sh.astype(np.float32).tofile("dir_sh.bin")
     print("Dir function components computed.")
+    print(dir_sh)

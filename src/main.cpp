@@ -18,14 +18,14 @@ unsigned int VBO, VAO, EBO;
 ShaderProgram mainProg;
 ShaderProgram jssComputeProg;
 
-GLuint blueNoiseTexture;
-GLuint densityTexture;
-GLuint densityTildeTexture;
-GLuint depthTableTexture;
-GLuint aTableTexture;
-GLuint bTableTexture;
-GLuint jssTexture;
-GLuint rbfBuffer;
+GLuint blueNoiseTexture = 0;
+GLuint densityTexture = 0;
+GLuint densityTildeTexture = 0;
+GLuint depthTableTexture = 0;
+GLuint aTableTexture = 0;
+GLuint bTableTexture = 0;
+GLuint jssTexture = 0;
+GLuint rbfBuffer = 0;
 
 const int BN_TEX = 0;
 const int DENSITY_TEX = 1;
@@ -38,6 +38,7 @@ const int JSS_TEX = 6;
 float maxDensityMagnitude;
 vector<float> hgShValues;
 vector<float> dirShValues;
+glm::ivec3 densityShape;
 
 struct RBF {
     glm::vec4 c;
@@ -67,6 +68,7 @@ void loadBlueNoise(){
     }
 
     GLenum format = (channels == 4) ? GL_RGBA : GL_RGB;
+    glDeleteTextures(1, &blueNoiseTexture);
     glGenTextures(1, &blueNoiseTexture);
     glBindTexture(GL_TEXTURE_2D, blueNoiseTexture);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -79,12 +81,14 @@ void loadBlueNoise(){
 
 void loadScalarFlowDensity(){
     const int X = 100, Y = 178, Z = 100;
+    densityShape = glm::ivec3(X, Y, Z);
     vector<float> density(X * Y * Z);
 
     string path = "src/densities/";
     ifstream f(path + "density.bin", std::ios::binary);
     f.read(reinterpret_cast<char*>(density.data()), density.size() * sizeof(float));
 
+    glDeleteTextures(1, &densityTexture);
     glGenTextures(1, &densityTexture);
     glBindTexture(GL_TEXTURE_3D, densityTexture);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -97,6 +101,7 @@ void loadScalarFlowDensity(){
     ifstream fTilde(path + "density_tilde.bin", std::ios::binary);
     fTilde.read(reinterpret_cast<char*>(density.data()), density.size() * sizeof(float));
 
+    glDeleteTextures(1, &densityTildeTexture);
     glGenTextures(1, &densityTildeTexture);
     glBindTexture(GL_TEXTURE_3D, densityTildeTexture);
     glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -115,6 +120,7 @@ void loadShData(){
     ifstream f(path, std::ios::binary);
     f.read(reinterpret_cast<char*>(depthTable.data()), depthTable.size() * sizeof(float));
 
+    glDeleteTextures(1, &depthTableTexture);
     glGenTextures(1, &depthTableTexture);
     glBindTexture(GL_TEXTURE_1D, depthTableTexture);
     glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA32F, nBeta, 0, GL_RGBA, GL_FLOAT, depthTable.data());
@@ -132,12 +138,14 @@ void loadShData(){
     vector<float> aTable(expData.begin() + 1, expData.begin() + tableSize + 1);
     vector<float> bTable(expData.begin() + tableSize + 1, expData.end());
 
+    glDeleteTextures(1, &aTableTexture);
     glGenTextures(1, &aTableTexture);
     glBindTexture(GL_TEXTURE_1D, aTableTexture);
     glTexImage1D(GL_TEXTURE_1D, 0, GL_R32F, tableSize, 0, GL_RED, GL_FLOAT, aTable.data());
     glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
+    glDeleteTextures(1, &bTableTexture);
     glGenTextures(1, &bTableTexture);
     glBindTexture(GL_TEXTURE_1D, bTableTexture);
     glTexImage1D(GL_TEXTURE_1D, 0, GL_R32F, tableSize, 0, GL_RED, GL_FLOAT, bTable.data());
@@ -158,11 +166,12 @@ void loadShData(){
 }
 
 void loadRbfs(){
-    const int numRBF = 400;
+    const int numRBF = 500;
     vector<float> rbfData(numRBF * 5);
     string path = "src/densities/rbfs.bin";
     ifstream f(path, std::ios::binary);
     f.read(reinterpret_cast<char*>(rbfData.data()), rbfData.size() * sizeof(float));
+    rbfs.clear();
     for (int i = 0; i < numRBF; i++)
     {
         RBF rbf = {
@@ -174,11 +183,13 @@ void loadRbfs(){
         rbfs.push_back(rbf);
     }
 
+    glDeleteBuffers(1, &rbfBuffer);
     glGenBuffers(1, &rbfBuffer);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, rbfBuffer);
     glBufferData(GL_SHADER_STORAGE_BUFFER, rbfs.size() * sizeof(RBF), rbfs.data(), GL_STATIC_DRAW);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, rbfBuffer);
 
+    glDeleteTextures(1, &jssTexture);
     glGenTextures(1, &jssTexture);
     glBindTexture(GL_TEXTURE_2D, jssTexture);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, numRBF, 16, 0, GL_RGBA, GL_FLOAT, nullptr);
@@ -191,26 +202,23 @@ void initMainProg(){
     mainProg.use();
 
     glUniform1i(glGetUniformLocation(mainProg.id(), "numRBF"), rbfs.size());
+    glUniform3i(glGetUniformLocation(mainProg.id(), "densityShape"), densityShape.x, densityShape.y, densityShape.z);
 
-    GLuint blueNoiseLoc = glGetUniformLocation(mainProg.id(), "blueNoise");
     glActiveTexture(GL_TEXTURE0 + BN_TEX);
     glBindTexture(GL_TEXTURE_2D, blueNoiseTexture);
-    glUniform1i(blueNoiseLoc, BN_TEX);
+    glUniform1i(glGetUniformLocation(mainProg.id(), "blueNoise"), BN_TEX);
 
-    GLuint densityTextureLoc = glGetUniformLocation(mainProg.id(), "densityTexture");
     glActiveTexture(GL_TEXTURE0 + DENSITY_TEX);
     glBindTexture(GL_TEXTURE_3D, densityTexture);
-    glUniform1i(densityTextureLoc, DENSITY_TEX);
+    glUniform1i(glGetUniformLocation(mainProg.id(), "densityTexture"), DENSITY_TEX);
 
-    GLuint densityTildeTextureLoc = glGetUniformLocation(mainProg.id(), "densityTildeTexture");
     glActiveTexture(GL_TEXTURE0 + DENSITY_TILDE_TEX);
     glBindTexture(GL_TEXTURE_3D, densityTildeTexture);
-    glUniform1i(densityTildeTextureLoc, DENSITY_TILDE_TEX);
+    glUniform1i(glGetUniformLocation(mainProg.id(), "densityTildeTexture"), DENSITY_TILDE_TEX);
 
-    GLuint jssTextureLoc = glGetUniformLocation(mainProg.id(), "jssTexture");
     glActiveTexture(GL_TEXTURE0 + JSS_TEX);
     glBindTexture(GL_TEXTURE_2D, jssTexture);
-    glUniform1i(jssTextureLoc, JSS_TEX);
+    glUniform1i(glGetUniformLocation(mainProg.id(), "jssTexture"), JSS_TEX);
 }
 
 void initCompute(){
@@ -234,6 +242,16 @@ void initCompute(){
 
     glUniform1fv(glGetUniformLocation(jssComputeProg.id(), "hgSh"), 16, hgShValues.data());
     glUniform1fv(glGetUniformLocation(jssComputeProg.id(), "dirSh"), 16, dirShValues.data());
+}
+
+void loadData(){
+    loadBlueNoise();
+    loadScalarFlowDensity();
+    loadShData();
+    loadRbfs();
+
+    initMainProg();
+    initCompute();
 }
 
 void init(){
@@ -268,13 +286,7 @@ void init(){
 
     camera.resetMousePos(app.mouseX(), app.mouseY());
     
-    loadBlueNoise();
-    loadScalarFlowDensity();
-    loadShData();
-    loadRbfs();
-
-    initMainProg();
-    initCompute();
+    loadData();
 }
 
 void handleCamera(){
@@ -303,7 +315,7 @@ void computeJss(){
 
     int n = (rbfs.size() + 63) / 64;
     jssComputeProg.dispatch(n, 1, 1);
-    jssComputeProg.barrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+    ShaderProgram::barrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 }
 
 void render(){
@@ -326,6 +338,15 @@ void render(){
 }
 
 void inputs(){
+    if (app.keyPressed(GLFW_KEY_LEFT_SHIFT)){
+        // Hot reload data
+        if (app.keyPressedOnce(GLFW_KEY_R, frameCount)){
+            loadData();
+            cout << "Data reloaded." << endl;
+        }
+        return;
+    }
+
     // Toggle cursor
     if (app.keyPressedOnce(GLFW_KEY_P, frameCount)){
         app.toggleCursor(app.cursorIsHidden());
@@ -338,21 +359,8 @@ void inputs(){
         jssComputeProg.reload();
         initMainProg();
         initCompute();
-        cout << "Shaders reloaded" << endl;
+        cout << "Shaders reloaded." << endl;
     }
-
-    // if (app.keyPressedOnce(GLFW_KEY_TAB, frameCount)){
-    //     switch (densityNumber)
-    //     {
-    //     case 0:
-    //         loadScalarFlowDensity("density_tilde.bin", false);
-    //         break;
-    //     case 1:
-    //         loadScalarFlowDensity("density.bin", false);
-    //         break;
-    //     }
-    //     densityNumber = (densityNumber + 1) % 2;
-    // }
 }
 
 void end(){

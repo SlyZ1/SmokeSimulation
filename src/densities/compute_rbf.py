@@ -15,7 +15,7 @@ def load_density(path):
     D = D.astype(np.float32)
     counts, bins = np.histogram(D.flatten(), bins=200)
     D /= D.max()
-    n_clamp = 100
+    n_clamp = 200
     threshold = np.partition(D.flatten(), -n_clamp)[-n_clamp]
     D = np.clip(D, 0, threshold)
     D /= D.max()
@@ -28,6 +28,8 @@ def load_density(path):
     distances /= distances.max()
     #D_t = D_t + 0.01 * distances
     X = X.astype(np.float32) / D.shape[0]
+    print(X[:,0].min(), X[:,1].min(), X[:,2].min())
+    print(X[:,0].max(), X[:,1].max(), X[:,2].max())
 
     D_shape = D.shape
 
@@ -54,7 +56,7 @@ def load_params(load_from_data, numRBF):
         R = torch.nn.Parameter(torch.from_numpy(params['R']).to(device))
         W = torch.nn.Parameter(torch.from_numpy(params['W']).to(device))
     else:
-        mask = D >= D.mean()
+        mask = D >= D.mean() / 2
         X_masked = X[mask]
         D_masked = D[mask]
         indices = torch.linspace(0, X_masked.shape[0] - 1, numRBF).long()
@@ -111,6 +113,9 @@ def save_data(Res_N, Res_P, WdotB, C_, R_, W_):
         W=W_.detach().cpu().numpy()
     )
 
+    params_bin = np.concatenate([C_.detach().cpu().numpy().flatten(), R_.detach().cpu().numpy(), W_.detach().cpu().numpy()])
+    params_bin.tofile("rbfs.bin")
+
 def optimize_rbfs(stepsize, X_, D_):
     for _ in tqdm(range(stepsize)):
         optimizer.zero_grad()
@@ -130,32 +135,44 @@ def optimize_rbfs(stepsize, X_, D_):
     return WdotB, Res, loss
 
 def update_lrs(optimizer, speed=0.1):
-    optimizer.param_groups[0]['lr'] *= 1 - speed
-    optimizer.param_groups[0]['lr'] = np.max([optimizer.param_groups[0]['lr'], 0.001])
+    optimizer.param_groups[0]['lr'] *= 1 - speed * 2
+    optimizer.param_groups[0]['lr'] = np.max([optimizer.param_groups[0]['lr'], 0.00001])
     optimizer.param_groups[1]['lr'] *= 1 - speed
-    optimizer.param_groups[1]['lr'] = np.max([optimizer.param_groups[1]['lr'], 0.001])
+    optimizer.param_groups[1]['lr'] = np.max([optimizer.param_groups[1]['lr'], 0.0005])
     optimizer.param_groups[2]['lr'] *= 1 - speed
-    optimizer.param_groups[2]['lr'] = np.max([optimizer.param_groups[2]['lr'], 0.001])
+    optimizer.param_groups[2]['lr'] = np.max([optimizer.param_groups[2]['lr'], 0.0002])
     return optimizer
 
 
 if __name__ == "__main__":
     D, D_shape, X, D_original = load_density("raw_density.npz")
-    C, R, W = load_params(load_from_data=False, numRBF=400)
+    C, R, W = load_params(load_from_data=True, numRBF=500)
     batchsize = 4096*16
     optimizer = torch.optim.Adam([
-        {'params': [W], 'lr': 0.005},
-        {'params': [C], 'lr': 0.005},
-        {'params': [R], 'lr': 0.005},
+        {'params': [W], 'lr': 0.007},
+        {'params': [C], 'lr': 0.007},
+        {'params': [R], 'lr': 0.007},
     ])
-    stepsize = 10
+    bestloss = 450
+    stepsize = 20
     for step in range(500):
         WdotB, Res, loss = optimize_rbfs(stepsize=stepsize, X_=X, D_=D)
         pg = optimizer.param_groups
         print(f"D_tilde max: {WdotB.max()}")
         print(f"step {(step + 1) * stepsize}, loss: {loss.item():.1f}, lrs: [{pg[0]['lr']:.3}, {pg[1]['lr']:.3}, {pg[2]['lr']:.3}]")
-        #optimizer = update_lrs(optimizer, speed=0.05)
+        optimizer = update_lrs(optimizer, speed=0.05)
         
+        loss_np = loss.detach().cpu().numpy()
+        if loss_np < bestloss:
+            bestloss = loss_np
+            Res_N = Res.clone()
+            Res_N[Res_N > 0] = 0
+            Res_N = Res_N.abs()
+            
+            Res_P = D_original - WdotB
+            Res_P[Res_P < 0] = 0
+            save_data(Res_N, Res_P, WdotB, C, R, W)
+
         # Teleport
         if (step + 1) % 1 == 0:
             least_important_rbf, new_pos = teleport(R, W, D_shape, Res)
@@ -163,11 +180,3 @@ if __name__ == "__main__":
                 C[least_important_rbf] = new_pos
                 R[least_important_rbf] = torch.tensor(0.05, device=device)
                 W[least_important_rbf] = 0.9
-
-        Res_N = Res.clone()
-        Res_N[Res_N > 0] = 0
-        Res_N = Res_N.abs()
-        
-        Res_P = D_original - WdotB
-        Res_P[Res_P < 0] = 0
-        save_data(Res_N, Res_P, WdotB, C, R, W)

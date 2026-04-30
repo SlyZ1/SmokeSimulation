@@ -6,7 +6,7 @@ R = params['R']
 W = params['W']
 
 print("C:")
-print(f"\t• {np.min(C)} - {np.max(C)}")
+print(f"\t• {np.min(C[:,0])} {np.min(C[:,1])} {np.min(C[:,2])} - {np.max(C[:,0])} {np.max(C[:,1])} {np.max(C[:,2])}")
 print(f"\t• {np.mean(C, axis=0)}")
 
 print("R:")
